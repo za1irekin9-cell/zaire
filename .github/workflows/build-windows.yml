@@ -1,0 +1,33 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "617.cpp"
+      - ".github/workflows/build-windows.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
+
+      - name: Compile 617.exe
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -municode -mwindows -o 617.exe 617.cpp -lwinhttp -lgdi32 -luser32 -lkernel32
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 617-windows
+          path: 617.exe
