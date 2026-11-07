@@ -1,0 +1,63 @@
+name: run-windows-smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MinGW-w64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-gcc
+
+      - name: Compile
+        shell: msys2 {0}
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -municode -mwindows -o 617.exe 617.cpp -lwinhttp -lgdi32 -luser32 -lkernel32
+
+      - name: Launch, type an idea, save, screenshot
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          Remove-Item -Recurse -Force "$env:USERPROFILE\.617" -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath "$PWD\617.exe" -PassThru
+          Start-Sleep -Seconds 3
+          $p.Refresh()
+          "Process alive: $(-not $p.HasExited)  Responding: $($p.Responding)"
+
+          $ws = New-Object -ComObject WScript.Shell
+          $ws.AppActivate($p.Id) | Out-Null
+          Start-Sleep -Seconds 1
+          # Tab order: title -> description -> Save
+          $ws.SendKeys("Pocket chess")
+          $ws.SendKeys("{TAB}")
+          $ws.SendKeys("chess tutor for kids{ENTER}daily puzzles")
+          $ws.SendKeys("{TAB}")
+          $ws.SendKeys(" ")
+          Start-Sleep -Seconds 2
+
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$PWD\shot.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose(); $bmp.Dispose()
+
+          "--- ideas.dat ---"
+          if (Test-Path "$env:USERPROFILE\.617\ideas.dat") {
+            Get-Content "$env:USERPROFILE\.617\ideas.dat"
+          } else {
+            "ideas.dat NOT FOUND"
+          }
+          "Process alive after save: $(-not $p.HasExited)"
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+
+          "--- screenshot base64 start ---"
+          [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\shot.png"))
+          "--- screenshot base64 end ---"
